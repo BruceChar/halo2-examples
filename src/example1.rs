@@ -11,6 +11,7 @@ struct ACell<F: Field>(AssignedCell<F, F>);
 struct FiboConfig {
     pub advice: [Column<Advice>; 3],
     pub selector: Selector,
+    pub instance: Column<Instance>,
 }
 
 struct FiboChip<F: Field> {
@@ -26,16 +27,17 @@ impl<F: Field> FiboChip<F> {
         }
     }
 
-    fn configure(meta: &mut ConstraintSystem<F>) -> FiboConfig {
+    fn configure(meta: &mut ConstraintSystem<F>, instance: Column<Instance>) -> FiboConfig {
         let col_a = meta.advice_column();
         let col_b = meta.advice_column();
         let col_c = meta.advice_column();
         let selector = meta.selector();
 
-        /// enable the equality
+        // enable the equality
         meta.enable_equality(col_a);
         meta.enable_equality(col_b);
         meta.enable_equality(col_c);
+        meta.enable_equality(instance);
 
         meta.create_gate("add", |meta| {
             let s = meta.query_selector(selector);
@@ -48,6 +50,7 @@ impl<F: Field> FiboChip<F> {
         FiboConfig {
             advice: [col_a, col_b, col_c],
             selector,
+            instance
         }
     }
 
@@ -100,7 +103,7 @@ impl<F: Field> FiboChip<F> {
                 let c_val = pre_b
                     .0
                     .value()
-                    .and_then(|b| pre_c.0.value().map(|c| *c + *b + F::ONE));
+                    .and_then(|b| pre_c.0.value().map(|c| *c + *b));
 
                 let c_cell = region
                     .assign_advice(|| "c", self.config.advice[2], 0, || c_val)
@@ -109,6 +112,15 @@ impl<F: Field> FiboChip<F> {
                 Ok(c_cell)
             },
         )
+    }
+
+    pub fn expose_public(
+        &self,
+        mut layouter: impl Layouter<F>,
+        cell: &ACell<F>,
+        row: usize
+    ) -> Result<(), Error> {
+        layouter.constrain_instance(cell.0.cell(), self.config.instance, row)
     }
 }
 
@@ -127,9 +139,9 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        /// we can define the advices here to share
-        /// 
-        FiboChip::configure(meta)
+        // we can define the instance here to share between chips
+        let instance = meta.instance_column();
+        FiboChip::configure(meta, instance)
     }
 
     fn synthesize(
@@ -142,11 +154,19 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
         let (_, mut pre_b, mut pre_c) =
             chip.assign_first_row(layouter.namespace(|| "first row"), self.a, self.b)?;
 
+
         for _i in 3..10 {
             let c_cell = chip.assign_row(layouter.namespace(|| "next row"), &pre_b, &pre_c)?;
             pre_b = pre_c;
             pre_c = c_cell;
         }
+
+        // SAME: assign_advice_from_instance
+        chip.expose_public(layouter.namespace(
+            || "out"), 
+            &pre_c,
+            2)?;
+
         Ok(())
     }
 }
@@ -154,11 +174,20 @@ fn main() {
     let k = 4;
     let a = Fp::from(1);
     let b = Fp::from(1);
+    let out = Fp::from(55);
     let circuit = MyCircuit {
         a: Value::known(a),
         b: Value::known(b),
     };
 
-    let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+    let mut publics = vec![a, b, out];
+
+    let prover = MockProver::run(k, &circuit, vec![publics.clone()]).unwrap();
     prover.assert_satisfied();
+
+    // wrong out
+    publics[2] += Fp::from(10);
+    let _prover = MockProver::run(k, &circuit, vec![publics.clone()]).unwrap();
+    // uncomment the following line will fail
+    // _prover.assert_satisfied();
 }
