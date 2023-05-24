@@ -100,12 +100,9 @@ impl<F: Field> FiboChip<F> {
 }
 
 #[derive(Default)]
-struct MyCircuit<F> {
-    pub a: Value<F>,
-    pub b: Value<F>,
-}
+struct MyCircuit;
 
-impl<F: Field> Circuit<F> for MyCircuit<F> {
+impl<F: Field> Circuit<F> for MyCircuit {
     type Config = FiboConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -139,10 +136,7 @@ fn main() {
     let k = 4;
     let a = Fp::from(1);
     let out = Fp::from(55);
-    let circuit = MyCircuit {
-        a: Value::known(a),
-        b: Value::known(a),
-    };
+    let circuit = MyCircuit;
 
     let mut publics = vec![a, a, out];
 
