@@ -5,14 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bin]]
-name = "fibo1"
-path  = "src/fibo1.rs"
-
-
-[[bin]]
-name = "fibo2"
-path  = "src/fibo2.rs"
+[features]
+dev-graph = ["halo2_proofs/dev-graph", "plotters"]
 
 [dependencies]
 halo2_proofs = "0.3.0"
+plotters = { version = "0.3.0", optional = true }
+tabbycat = { version = "0.1", features = ["attributes"], optional = true }

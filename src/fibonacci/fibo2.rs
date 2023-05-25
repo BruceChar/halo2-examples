@@ -47,6 +47,16 @@ impl<F: Field> FiboChip<F> {
         }
     }
 
+    /// | row |  advice  | selector |   instance  |
+    /// |  0  |    1     |     1    |       1     |
+    /// |  1  |    1     |     1    |       1     |
+    /// |  2  |    2     |     1    |      55     |
+    ///                  .
+    ///                  .
+    ///                  .
+    /// |  7  |    21    |     1     |      
+    /// |  8  |    34    |     0     |      
+    /// |  9  |    55    |     0     |      
     fn assign(
         &self,
         mut layouter: impl Layouter<F>,
@@ -100,9 +110,9 @@ impl<F: Field> FiboChip<F> {
 }
 
 #[derive(Default)]
-struct MyCircuit;
+struct MyCircuit<F>(PhantomData<F>);
 
-impl<F: Field> Circuit<F> for MyCircuit {
+impl<F: Field> Circuit<F> for MyCircuit<F> {
     type Config = FiboConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -136,7 +146,7 @@ fn main() {
     let k = 4;
     let a = Fp::from(1);
     let out = Fp::from(55);
-    let circuit = MyCircuit;
+    let circuit = MyCircuit::<Fp>(PhantomData);
 
     let mut publics = vec![a, a, out];
 
@@ -148,4 +158,26 @@ fn main() {
     let _prover = MockProver::run(k, &circuit, vec![publics.clone()]).unwrap();
     // uncomment the following line will fail
     // _prover.assert_satisfied();
+}
+
+#[cfg(test)]
+mod tests {
+    // --features=dev-graph
+    #[cfg(feature = "dev-graph")]
+    #[test]
+    fn plot_fibo2() {
+        use super::*;
+        use plotters::prelude::*;
+        use halo2_proofs::{pasta::Fp};
+        use std::marker::PhantomData;
+
+        let root = BitMapBackend::new("fib-2-layout.png", (1024, 3096)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root.titled("Fib 2 Layout", ("sans-serif", 60)).unwrap();
+
+        let circuit = MyCircuit::<Fp>(PhantomData);
+        halo2_proofs::dev::CircuitLayout::default()
+            .render(4, &circuit, &root)
+            .unwrap();
+    }
 }
